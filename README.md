@@ -36,11 +36,13 @@ DRIFT/
 ├── requirements.txt
 ├── .gitignore
 └── README.md
+``` 
+---
 ## Installation
 
 ### 1. Environment
 
-We recommend using **conda**.
+We recommend using **conda** to manage the runtime environment.
 
 ```bash
 conda create -n nnunetv2 python=3.9
@@ -49,7 +51,7 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install -r requirements.txt
 pip install -e .
 nnUNetv2_train -h
-
+```
 
 ### 2. Usage
 
@@ -62,7 +64,7 @@ DRIFT follows the standard **nnUNetv2** command-line interface.
 ```bash
 nnUNetv2_train <dataset_name_or_id> <configuration> <fold> [options]
 
-
+```
 ### 3. Data Preparation
 
 
@@ -93,7 +95,7 @@ If you find this work useful, please cite our paper:
   journal = {Journal Name},
   year    = {2024}
 }
-
+```
 ## Acknowledgements
 
 This work is built upon the excellent **nnUNetv2** framework:
