@@ -1,0 +1,30 @@
+# Core deep learning
+torch
+torchvision
+torchaudio
+
+# nnUNetv2 core dependencies
+numpy
+scipy
+scikit-image
+scikit-learn
+pandas
+tqdm
+matplotlib
+seaborn
+
+# Medical imaging & IO
+SimpleITK
+nibabel
+imageio
+opencv-python
+
+# Utilities
+PyYAML
+einops
+batchgenerators
+dynamic-network-architectures
+
+# Logging & experiment tracking (optional but commonly used)
+tensorboard
+
