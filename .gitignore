@@ -1,0 +1,23 @@
+# python cache
+__pycache__/
+*.pyc
+
+# logs & outputs
+*.log
+runs/
+outputs/
+results/
+wandb/
+
+# model checkpoints
+*.pt
+*.pth
+*.ckpt
+
+# datasets (DO NOT UPLOAD)
+data/
+datasets/
+*.svs
+*.tif
+*.tiff
+

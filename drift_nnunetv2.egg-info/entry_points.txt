@@ -1,0 +1,2 @@
+[console_scripts]
+nnUNetv2_train = nnunetv2.run.run_training:run_training_entry

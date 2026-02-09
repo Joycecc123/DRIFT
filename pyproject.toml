@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drift-nnunetv2"
+version = "0.1.0"
+description = "DRIFT built upon nnUNetv2 for robust multi-domain digital pathology segmentation."
+requires-python = ">=3.8"
+
+[tool.setuptools]
+packages = ["nnunetv2", "s1"]
+
+[tool.setuptools.package-dir]
+nnunetv2 = "s2s3"
+s1 = "s1"
+
+[project.scripts]
+nnUNetv2_train = "nnunetv2.run.run_training:run_training_entry"
+
+
