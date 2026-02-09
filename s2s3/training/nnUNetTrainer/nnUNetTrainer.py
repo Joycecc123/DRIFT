@@ -364,52 +364,8 @@ class nnUNetTrainer(object):
             self.batch_size = batch_size_per_GPU[my_rank]
             self.oversample_foreground_percent = oversample_percent
 
-    # def _build_loss(self):
-    #     if self.label_manager.has_regions:
-    #         loss = DC_and_BCE_loss({},
-    #                                {'batch_dice': self.configuration_manager.batch_dice,
-    #                                 'do_bg': True, 'smooth': 1e-5, 'ddp': self.is_ddp},
-    #                                use_ignore_label=self.label_manager.ignore_label is not None,
-    #                                dice_class=MemoryEfficientSoftDiceLoss)
-    #     else:
-    #          loss = DC_and_CE_loss(
-    #                                 soft_dice_kwargs={'batch_dice': self.configuration_manager.batch_dice},
-    #                                 ce_kwargs={'batch_dice': self.configuration_manager.batch_dice},
-    #                                 inverse_kwargs={
-    #                                 'base_size': 224,
-    #                                 'min_tile_size': 128,
-    #                                 'max_tile_size': 512,
-    #                                 'overlap': 32,
-    #                                 'direct_process_threshold': 256
-    #                                 }
-    #                             )
-
-    #     # we give each output a weight which decreases exponentially (division by 2) as the resolution decreases
-    #     # this gives higher resolution outputs more weight in the loss
-
-    #     if self.enable_deep_supervision:
-    #         deep_supervision_scales = self._get_deep_supervision_scales()
-    #         weights = np.array([1 / (2 ** i) for i in range(len(deep_supervision_scales))])
-    #         if self.is_ddp and not self._do_i_compile():
-    #             # very strange and stupid interaction. DDP crashes and complains about unused parameters due to
-    #             # weights[-1] = 0. Interestingly this crash doesn't happen with torch.compile enabled. Strange stuff.
-    #             # Anywho, the simple fix is to set a very low weight to this.
-    #             weights[-1] = 1e-6
-    #         else:
-    #             weights[-1] = 0
-
-    #         # we don't use the lowest 2 outputs. Normalize weights so that they sum to 1
-    #         weights = weights / weights.sum()
-    #         # now wrap the loss
-    #         loss = DeepSupervisionWrapper(loss, weights)
-    #     return loss
     def _build_loss(self):
-        """
-        构建损失函数
-        
-        Returns:
-            nn.Module: 配置好的损失函数
-        """
+       
         if self.label_manager.has_regions:
             loss = DC_and_BCE_loss({},
                                 {'batch_dice': self.configuration_manager.batch_dice,
@@ -417,7 +373,7 @@ class nnUNetTrainer(object):
                                 use_ignore_label=self.label_manager.ignore_label is not None,
                                 dice_class=MemoryEfficientSoftDiceLoss)
         else:
-            # 配置Dice loss参数
+            
             soft_dice_kwargs = {
                 'batch_dice': self.configuration_manager.batch_dice,
                 'do_bg': True,
@@ -425,26 +381,21 @@ class nnUNetTrainer(object):
                 'ddp': self.is_ddp
             }
             
-            # 配置CE loss参数
+            
             ce_kwargs = {
                 'smooth': 1e-5
             }
             
-            # 配置inverse loss参数
+            
             inverse_kwargs = {
                 'base_size': 224,
                 'min_tile_size': 128,
                 'max_tile_size': 512,
                 'overlap': 32,
                 'direct_process_threshold': 256,
-                # # Warmup相关参数
-                # 'warmup_epochs': 10,  # warmup持续10个epoch
-                # 'warmup_start_epoch': 5,  # 从第5个epoch开始
-                # 'warmup_initial_weight': 0.1,  # 初始权重
-                # 'warmup_mode': 'cosine'  # 使用余弦warmup策略
             }
             
-            # 创建损失函数
+          
             loss = DC_and_CE_loss(
                 soft_dice_kwargs=soft_dice_kwargs,
                 ce_kwargs=ce_kwargs,
@@ -456,7 +407,6 @@ class nnUNetTrainer(object):
                 dice_class=MemoryEfficientSoftDiceLoss
             )
 
-        # 处理深度监督
         if self.enable_deep_supervision:
             deep_supervision_scales = self._get_deep_supervision_scales()
             weights = np.array([1 / (2 ** i) for i in range(len(deep_supervision_scales))])
@@ -466,10 +416,10 @@ class nnUNetTrainer(object):
             else:
                 weights[-1] = 0
 
-            # 权重归一化
+           
             weights = weights / weights.sum()
             
-            # 包装损失函数
+            
             loss = DeepSupervisionWrapper(loss, weights)
             
         return loss
@@ -606,70 +556,13 @@ class nnUNetTrainer(object):
                 self.print_to_log_file("Unable to plot network architecture:")
                 self.print_to_log_file(e)
 
-                # self.print_to_log_file("\nprinting the network instead:\n")
-                # self.print_to_log_file(self.network)
-                # self.print_to_log_file("\n")
+                
             finally:
                 empty_cache(self.device)
 
-    # def do_split(self):
-    #     """
-    #     The default split is a 5 fold CV on all available training cases. nnU-Net will create a split (it is seeded,
-    #     so always the same) and save it as splits_final.json file in the preprocessed data directory.
-    #     Sometimes you may want to create your own split for various reasons. For this you will need to create your own
-    #     splits_final.json file. If this file is present, nnU-Net is going to use it and whatever splits are defined in
-    #     it. You can create as many splits in this file as you want. Note that if you define only 4 splits (fold 0-3)
-    #     and then set fold=4 when training (that would be the fifth split), nnU-Net will print a warning and proceed to
-    #     use a random 80:20 data split.
-    #     :return:
-    #     """
-    #     if self.fold == "all":
-    #         # if fold==all then we use all images for training and validation
-    #         case_identifiers = get_case_identifiers(self.preprocessed_dataset_folder)
-    #         tr_keys = case_identifiers
-    #         val_keys = tr_keys
-    #     else:
-    #         splits_file = join(self.preprocessed_dataset_folder_base, "splits_final.json")
-    #         dataset = nnUNetDataset(self.preprocessed_dataset_folder, case_identifiers=None,
-    #                                 num_images_properties_loading_threshold=0,
-    #                                 folder_with_segs_from_previous_stage=self.folder_with_segs_from_previous_stage)
-    #         # if the split file does not exist we need to create it
-    #         if not isfile(splits_file):
-    #             self.print_to_log_file("Creating new 5-fold cross-validation split...")
-    #             all_keys_sorted = list(np.sort(list(dataset.keys())))
-    #             splits = generate_crossval_split(all_keys_sorted, seed=12345, n_splits=5)
-    #             save_json(splits, splits_file)
-
-    #         else:
-    #             self.print_to_log_file("Using splits from existing split file:", splits_file)
-    #             splits = load_json(splits_file)
-    #             self.print_to_log_file(f"The split file contains {len(splits)} splits.")
-
-    #         self.print_to_log_file("Desired fold for training: %d" % self.fold)
-    #         if self.fold < len(splits):
-    #             tr_keys = splits[self.fold]['train']
-    #             val_keys = splits[self.fold]['val']
-    #             self.print_to_log_file("This split has %d training and %d validation cases."
-    #                                    % (len(tr_keys), len(val_keys)))
-    #         else:
-    #             self.print_to_log_file("INFO: You requested fold %d for training but splits "
-    #                                    "contain only %d folds. I am now creating a "
-    #                                    "random (but seeded) 80:20 split!" % (self.fold, len(splits)))
-    #             # if we request a fold that is not in the split file, create a random 80:20 split
-    #             rnd = np.random.RandomState(seed=12345 + self.fold)
-    #             keys = np.sort(list(dataset.keys()))
-    #             idx_tr = rnd.choice(len(keys), int(len(keys) * 0.8), replace=False)
-    #             idx_val = [i for i in range(len(keys)) if i not in idx_tr]
-    #             tr_keys = [keys[i] for i in idx_tr]
-    #             val_keys = [keys[i] for i in idx_val]
-    #             self.print_to_log_file("This random 80:20 split has %d training and %d validation cases."
-    #                                    % (len(tr_keys), len(val_keys)))
-    #         if any([i in val_keys for i in tr_keys]):
-    #             self.print_to_log_file('WARNING: Some validation cases are also in the training set. Please check the '
-    #                                    'splits.json or ignore if this is intentional.')
-    #     return tr_keys, val_keys
+    
     ##——————————————————————————————————————————————————————————————————————————————————————————————————————##
-    ##————————————————————————————————————————根据文件名分割出一个验证集————————————————————————————————————————##
+    ##————————————————————————————————————————one val————————————————————————————————————————##
     ##——————————————————————————————————————————————————————————————————————————————————————————————————————##
     # def do_split(self):
     #     """
@@ -749,7 +642,7 @@ class nnUNetTrainer(object):
 
     #     return tr_keys, val_keys
     ##——————————————————————————————————————————————————————————————————————————————————————————————————————##
-    ##————————————————————————————————————————根据文件名分割出两个验证集————————————————————————————————————————##
+    ##————————————————————————————————————————two val————————————————————————————————————————##
     ##——————————————————————————————————————————————————————————————————————————————————————————————————————##
     def do_split(self):
         """
@@ -826,7 +719,7 @@ class nnUNetTrainer(object):
         return tr_keys, val_keys_a, val_keys_b
 
 ##—————————————————————————————————————————————————————————————————————————————————##
-##——————————————————————————————一个验证集———————————————————————————————————————————##
+##——————————————————————————————one val———————————————————————————————————————————##
 ##—————————————————————————————————————————————————————————————————————————————————##
     # def get_tr_and_val_datasets(self):
     #     # create dataset split
@@ -842,7 +735,7 @@ class nnUNetTrainer(object):
     #                                 num_images_properties_loading_threshold=0)
     #     return dataset_tr, dataset_val
 ##—————————————————————————————————————————————————————————————————————————————————##
-##——————————————————————————————2个验证集———————————————————————————————————————————##
+##——————————————————————————————two val———————————————————————————————————————————##
 ##—————————————————————————————————————————————————————————————————————————————————##
     def get_tr_and_val_datasets(self):
         """
@@ -903,7 +796,7 @@ class nnUNetTrainer(object):
                                                         self.label_manager.has_regions else None,
                                                         ignore_label=self.label_manager.ignore_label)
 ##————————————————————————————————————————————————————————————————————————————————————————————————————##
-##————————————————————————————————————————————一个验证集————————————————————————————————————————————————##
+##————————————————————————————————————————————one val————————————————————————————————————————————————##
 ##————————————————————————————————————————————————————————————————————————————————————————————————————##
         # dl_tr, dl_val = self.get_plain_dataloaders(initial_patch_size, dim)
 
@@ -925,13 +818,13 @@ class nnUNetTrainer(object):
         # return mt_gen_train, mt_gen_val
     
 ##————————————————————————————————————————————————————————————————————————————————————————————————————##
-##————————————————————————————————————————————2个验证集————————————————————————————————————————————————##
+##————————————————————————————————————————————two val———————————————————————————————————————————————##
 ##————————————————————————————————————————————————————————————————————————————————————————————————————##   
 
-         # 修改这里的调用方式
+         
         # print(f"initial_patch_size: {initial_patch_size}, dim:{dim}")
         dl_tr, dl_val_a, dl_val_b = self.get_plain_dataloaders(initial_patch_size, dim)
-        # print("---------修改这里的调用方式")
+        
 
         allowed_num_processes = get_allowed_n_proc_DA()
         # print(f"allowed_num_processes: {allowed_num_processes}")
@@ -948,13 +841,6 @@ class nnUNetTrainer(object):
             mt_gen_val_b = LimitedLenWrapper(self.num_val_iterations_per_epoch // 2, data_loader=dl_val_b,
                                             transform=val_transforms, num_processes=max(1, allowed_num_processes // 2))
             
-        # print("-----------------------------")
-        # print(f"self.num_iterations_per_epoch:{self.num_iterations_per_epoch}")
-        # print(f"self.num_val_iterations_per_epoch:{self.num_val_iterations_per_epoch}")
-        # print(f"self.num_val_iterations_per_epoch//2:{self.num_val_iterations_per_epoch//2}")
-        # print(f"mt_gen_train:{mt_gen_train.__len__()}")
-        # print(f"mt_gen_val_a:{mt_gen_val_a.__len__()}")
-        # print(f"mt_gen_val_b:{mt_gen_val_b.__len__()}")
 
         _ = next(mt_gen_train)
         _ = next(mt_gen_val_a)
@@ -963,7 +849,7 @@ class nnUNetTrainer(object):
 
         return mt_gen_train, mt_gen_val_a, mt_gen_val_b
 ###————————————————————————————————————————————————————————————————————————————————————————###
-###———————————————————————————————一个验证集——————————————————————————————————————————————————###
+###———————————————————————————————one val——————————————————————————————————————————————————###
 ###————————————————————————————————————————————————————————————————————————————————————————###
     # def get_plain_dataloaders(self, initial_patch_size: Tuple[int, ...], dim: int):
     #     dataset_tr, dataset_val = self.get_tr_and_val_datasets()
@@ -997,7 +883,7 @@ class nnUNetTrainer(object):
     #     return dl_tr, dl_val
     
 ###————————————————————————————————————————————————————————————————————————————————————————###
-###———————————————————————————————两个验证集——————————————————————————————————————————————————###
+###———————————————————————————————two val——————————————————————————————————————————————————###
 ###————————————————————————————————————————————————————————————————————————————————————————###
     def get_plain_dataloaders(self, initial_patch_size: Tuple[int, ...], dim: int):
         """
@@ -1266,37 +1152,7 @@ class nnUNetTrainer(object):
         # lrs are the same for all workers so we don't need to gather them in case of DDP training
         self.logger.log('lrs', self.optimizer.param_groups[0]['lr'], self.current_epoch)
 
-    # def generate_edge_gt_multi_scale(self, target_list):
-    #     """
-    #     从多尺度分割目标标签中提取每个尺度的类别 1 和类别 2 的边缘 GT 标签。
-    #     :param target_list: 多尺度目标标签列表，每个元素的形状为 (batch_size, 1, height, width)，
-    #                         每个像素的值表示类别（0-背景，1-肿瘤，2-基质）。
-    #     :return: 两个列表，分别为每个尺度的类别 1 和类别 2 的边缘 GT 标签列表，
-    #             每个标签的形状为 (batch_size, 1, height, width)。
-    #     """
-    #     edge_gt_class1_list = []
-    #     edge_gt_class2_list = []
-
-    #     for target in target_list:
-    #         batch_size, _, height, width = target.shape
-    #         edge_gt_class1 = torch.zeros((batch_size, 1, height, width), dtype=torch.float32, device=target.device)
-    #         edge_gt_class2 = torch.zeros((batch_size, 1, height, width), dtype=torch.float32, device=target.device)
-
-    #         for i in range(batch_size):
-    #             # 生成类别 1 (肿瘤) 的边缘
-    #             tumor_mask = (target[i, 0] == 1).float()  # 类别 1 掩码
-    #             edge_tumor = tumor_mask - F.max_pool2d(tumor_mask.unsqueeze(0), kernel_size=3, stride=1, padding=1)[0]
-    #             edge_gt_class1[i, 0] = torch.clamp(edge_tumor, min=0)
-
-    #             # 生成类别 2 (基质) 的边缘
-    #             stroma_mask = (target[i, 0] == 2).float()  # 类别 2 掩码
-    #             edge_stroma = stroma_mask - F.max_pool2d(stroma_mask.unsqueeze(0), kernel_size=3, stride=1, padding=1)[0]
-    #             edge_gt_class2[i, 0] = torch.clamp(edge_stroma, min=0)
-
-    #         edge_gt_class1_list.append(edge_gt_class1)
-    #         edge_gt_class2_list.append(edge_gt_class2)
-
-    #     return edge_gt_class1_list, edge_gt_class2_list
+   
     def generate_edge_gt_multi_scale(self, target_list):
         edge_gt_class1_list = []
         edge_gt_class2_list = []
@@ -1305,16 +1161,13 @@ class nnUNetTrainer(object):
             batch_size, _, height, width = target.shape
             edge_gt_class1 = torch.zeros((batch_size, 1, height, width), dtype=torch.float32, device=target.device)
             edge_gt_class2 = torch.zeros((batch_size, 1, height, width), dtype=torch.float32, device=target.device)
-
-            # 打印target的统计信息
-            #print(f"\nTarget unique values: {torch.unique(target)}")
+            
             
             for i in range(batch_size):
-                # 类别1(肿瘤)的边缘
+               
                 tumor_mask = (target[i, 0] == 1).float()
-                #print(f"Tumor mask sum: {tumor_mask.sum()}")  # 检查是否有肿瘤像素
                 
-                # 使用dilate和erode来获取边缘
+            
                 kernel = torch.ones(3, 3, device=target.device)
                 dilated_tumor = F.conv2d(tumor_mask.unsqueeze(0).unsqueeze(0), 
                                     kernel.unsqueeze(0).unsqueeze(0),
@@ -1325,9 +1178,9 @@ class nnUNetTrainer(object):
                 edge_tumor = (dilated_tumor ^ eroded_tumor).float()[0, 0]
                 edge_gt_class1[i, 0] = edge_tumor
                 
-                # 类别2(基质)的边缘
+               
                 stroma_mask = (target[i, 0] == 2).float()
-                #print(f"Stroma mask sum: {stroma_mask.sum()}")  # 检查是否有基质像素
+                
                 
                 dilated_stroma = F.conv2d(stroma_mask.unsqueeze(0).unsqueeze(0),
                                         kernel.unsqueeze(0).unsqueeze(0),
@@ -1338,8 +1191,7 @@ class nnUNetTrainer(object):
                 edge_stroma = (dilated_stroma ^ eroded_stroma).float()[0, 0]
                 edge_gt_class2[i, 0] = edge_stroma
 
-            # print(f"Edge GT 1 sum: {edge_gt_class1.sum()}")
-            # print(f"Edge GT 2 sum: {edge_gt_class2.sum()}")
+           
             
             edge_gt_class1_list.append(edge_gt_class1)
             edge_gt_class2_list.append(edge_gt_class2)
@@ -1349,7 +1201,7 @@ class nnUNetTrainer(object):
     def train_step(self, batch: dict) -> dict:
         data = batch['data']
         target = batch['target']
-        # 将数据和目标张量迁移到合适的设备上
+        
         data = data.to(self.device, non_blocking=True)
         if isinstance(target, list):
             target = [i.to(self.device, non_blocking=True) for i in target]
@@ -1361,11 +1213,11 @@ class nnUNetTrainer(object):
             seg_output, edge_output_class1, edge_output_class2 = self.network(data)
 
 
-            # 生成多尺度的类别 1 和类别 2 的边缘 GT
+           
             edge_gt_class1_list, edge_gt_class2_list = self.generate_edge_gt_multi_scale(target)
             l, dc_loss, ce_loss, inverse_loss = self.loss(seg_output, target, edge_output_class1, edge_output_class2, edge_gt_class1_list, edge_gt_class2_list)
 
-        # 梯度缩放部分
+        
         if self.grad_scaler is not None:
             self.grad_scaler.scale(l).backward()
             self.grad_scaler.unscale_(self.optimizer)
@@ -1377,7 +1229,7 @@ class nnUNetTrainer(object):
             torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
             self.optimizer.step()
 
-        # 记录所有的损失
+       
         return {
             'l': l.detach().cpu().numpy(),
             'dc_loss': dc_loss.detach().cpu().numpy(),
@@ -1385,41 +1237,6 @@ class nnUNetTrainer(object):
             'inverse_loss': inverse_loss.detach().cpu().numpy()
         }
 
-
-    # def train_step(self, batch: dict) -> dict:
-    #     data = batch['data']
-    #     target = batch['target']
-
-    #     data = data.to(self.device, non_blocking=True)
-    #     if isinstance(target, list):
-    #         target = [i.to(self.device, non_blocking=True) for i in target]
-    #     else:
-    #         target = target.to(self.device, non_blocking=True)
-
-    #     self.optimizer.zero_grad(set_to_none=True)
-    #     # Autocast can be annoying
-    #     # If the device_type is 'cpu' then it's slow as heck and needs to be disabled.
-    #     # If the device_type is 'mps' then it will complain that mps is not implemented, even if enabled=False is set. Whyyyyyyy. (this is why we don't make use of enabled=False)
-    #     # So autocast will only be active if we have a cuda device.
-    #     with autocast(self.device.type, enabled=True) if self.device.type == 'cuda' else dummy_context():
-    #         output = self.network(data)
-    #         print("\ntarget length:", len(target))
-    #         for i, tgt in enumerate(target):
-    #             print(f"target[{i}] shape:", tgt.shape)
-    #         # del data
-    #         l = self.loss(output, target)
-
-    #     if self.grad_scaler is not None:
-    #         self.grad_scaler.scale(l).backward()
-    #         self.grad_scaler.unscale_(self.optimizer)
-    #         torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
-    #         self.grad_scaler.step(self.optimizer)
-    #         self.grad_scaler.update()
-    #     else:
-    #         l.backward()
-    #         torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
-    #         self.optimizer.step()
-    #     return {'loss': l.detach().cpu().numpy()}
     
     def on_train_epoch_end(self, train_outputs: List[dict]):
 
@@ -1519,7 +1336,7 @@ class nnUNetTrainer(object):
 
         return {'loss': l.detach().cpu().numpy(), 'tp_hard': tp_hard, 'fp_hard': fp_hard, 'fn_hard': fn_hard}
     ##————————————————————————————————————————————————————————————————————————————————————————##
-    ##———————————————————————————————————————一个val———————————————————————————————————————————##
+    ##———————————————————————————————————————one val———————————————————————————————————————————##
     ##————————————————————————————————————————————————————————————————————————————————————————##
 
     # def on_validation_epoch_end(self, val_outputs: List[dict]):
@@ -1555,7 +1372,7 @@ class nnUNetTrainer(object):
     #     self.logger.log('dice_per_class_or_region', global_dc_per_class, self.current_epoch)
     #     self.logger.log('val_losses', loss_here, self.current_epoch)
 ##————————————————————————————————————————————————————————————————————————————————————————##
-##———————————————————————————————————————2个val———————————————————————————————————————————##
+##———————————————————————————————————————two val———————————————————————————————————————————##
 ##————————————————————————————————————————————————————————————————————————————————————————##
     def _process_validation_outputs(self, val_outputs, prefix=''):
         """
@@ -1619,9 +1436,9 @@ class nnUNetTrainer(object):
         num_outputs = len(val_outputs)
         val_outputs_a = val_outputs[:num_outputs//2]
         val_outputs_b = val_outputs[num_outputs//2:]
-        # 设置验证集A和B的权重
-        weight_a = 0.6  # A组(1-123)的权重
-        weight_b = 0.4  # B组(124-259)的权重
+        
+        weight_a = 0.6  
+        weight_b = 0.4  
         # Process each validation set
         results_a = self._process_validation_outputs(val_outputs_a, prefix='a')
         results_b = self._process_validation_outputs(val_outputs_b, prefix='b')
@@ -1632,14 +1449,12 @@ class nnUNetTrainer(object):
         fn_combined = results_a['fn'] * weight_a + results_b['fn'] * weight_b
             
         # Calculate combined Dice scores
-        # global_dc_per_class_combined = [2 * i / (2 * i + j + k) if (2 * i + j + k) > 0 else 0.0 
-        #                             for i, j, k in zip(tp_combined, fp_combined, fn_combined)]
-        # weighted_mean_dice = np.nanmean(global_dc_per_class_combined)
+      
         global_dc_per_class_combined = [float(2 * i / (2 * i + j + k)) if (2 * i + j + k) > 0 else 0.0 
                                for i, j, k in zip(tp_combined, fp_combined, fn_combined)]
-        # 计算加权平均的Dice分数
+        
         weighted_mean_dice = weight_a * results_a['mean_fg_dice'] + weight_b * results_b['mean_fg_dice']
-        # 在logging之前，确保所有数据都是Python的原生类型
+    
         results_dict = {
             'class_dice_info': {
                 'mean_fg_dice_a': float(results_a['mean_fg_dice']),
@@ -1675,7 +1490,7 @@ class nnUNetTrainer(object):
             f"Class-wise Dice: {json.dumps(dict(zip(results_a['class_dice_info'].keys(), global_dc_per_class_combined)), indent=2)}"
         )
 
-        # 在决定最佳模型时使用加权平均的Dice分数
+        
         if self._best_ema is None or weighted_mean_dice > self._best_ema:
             self._best_ema = weighted_mean_dice
             self.print_to_log_file(
@@ -1703,7 +1518,7 @@ class nnUNetTrainer(object):
         #print(f"'epoch_start_timestamps' {time()}, {self.current_epoch}")
         self.logger.log('epoch_start_timestamps', time(), self.current_epoch)
     ##————————————————————————————————————————————————————————————————————————————————————##
-    ##——————————————————————————————————一个验证集——————————————————————————————————————————##
+    ##——————————————————————————————————one val——————————————————————————————————————————##
     # def on_epoch_end(self):
     #     self.logger.log('epoch_end_timestamps', time(), self.current_epoch)
 
@@ -1734,7 +1549,7 @@ class nnUNetTrainer(object):
 
     #     self.current_epoch += 1
     ##————————————————————————————————————————————————————————————————————————————————————##
-    ##——————————————————————————————————两个验证集——————————————————————————————————————————##
+    ##——————————————————————————————————two val——————————————————————————————————————————##
     def on_epoch_end(self):
         """
         Handle end of epoch operations including logging and checkpoint saving
@@ -1776,7 +1591,7 @@ class nnUNetTrainer(object):
         print("\n=== Starting on_epoch_end ===")
     
         try:
-            if self.local_rank == 0:  # 只在主进程上绘图
+            if self.local_rank == 0:  
                 print("\nAbout to plot progress...")
                 print(f"Current epoch: {self.current_epoch}")
                 print(f"Output folder: {self.output_folder}")
@@ -1855,7 +1670,7 @@ class nnUNetTrainer(object):
             if checkpoint['grad_scaler_state'] is not None:
                 self.grad_scaler.load_state_dict(checkpoint['grad_scaler_state'])
     ###——————————————————————————————————————————————————————————————————————————###
-    ###————————————————————————————————1个验证集——————————————————————————————————###
+    ###————————————————————————————————one val——————————————————————————————————###
     ###——————————————————————————————————————————————————————————————————————————###
 
     # def perform_actual_validation(self, save_probabilities: bool = False):
@@ -2004,7 +1819,7 @@ class nnUNetTrainer(object):
 
 
     ###——————————————————————————————————————————————————————————————————————————###
-    ###————————————————————————————————2个验证集——————————————————————————————————###
+    ###————————————————————————————————two val——————————————————————————————————###
     ###——————————————————————————————————————————————————————————————————————————###
     def perform_actual_validation(self, save_probabilities: bool = False):
         self.set_deep_supervision_enabled(False)
@@ -2171,7 +1986,7 @@ class nnUNetTrainer(object):
 
 
     ###——————————————————————————————————————————————————————————————————————————###
-    ###————————————————————————————————1个验证集——————————————————————————————————###
+    ###————————————————————————————————one val——————————————————————————————————###
     ###——————————————————————————————————————————————————————————————————————————###
     # def run_training(self):
     #     self.on_train_start()
@@ -2196,7 +2011,7 @@ class nnUNetTrainer(object):
 
     #     self.on_train_end()
     ###——————————————————————————————————————————————————————————————————————————###
-    ###————————————————————————————————2个验证集——————————————————————————————————###
+    ###————————————————————————————————two val——————————————————————————————————###
     ###——————————————————————————————————————————————————————————————————————————###
     def run_training(self):
         #print("--------------------------Start training ............................")
@@ -2221,20 +2036,19 @@ class nnUNetTrainer(object):
                 train_outputs.append(train_step)
                 # train_outputs.append(self.train_step(next(self.dataloader_train)))
 
-            #print("...................\\\\\\\\\\\\\\\\\\\\\\\\\\////////////////")
+           
             self.on_train_epoch_end(train_outputs)
 
-            #print("...................////////////////")
             with torch.no_grad():
                 self.on_validation_epoch_start()
                 val_outputs_a = []
                 val_outputs_b = []
-                # 分别验证两个验证集
+                
                 for batch_id in range(self.num_val_iterations_per_epoch // 2):
                     val_outputs_a.append(self.validation_step(next(self.dataloader_val_a)))
                 for batch_id in range(self.num_val_iterations_per_epoch // 2):
                     val_outputs_b.append(self.validation_step(next(self.dataloader_val_b)))
-                # 合并验证结果
+                
                 val_outputs = val_outputs_a + val_outputs_b
                 self.on_validation_epoch_end(val_outputs)
 
