@@ -21,3 +21,4 @@ datasets/
 *.tif
 *.tiff
 
+*.egg-info/
